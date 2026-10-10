@@ -1,0 +1,50 @@
+# OS / editors
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+
+# Env
+.env
+.env.*
+!.env.example
+
+# Node / Next
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+next-env.d.ts
+.vercel/
+AGENTS.md
+web/AGENTS.md
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ipynb_checkpoints/
+*.egg-info/
+
+# Data and models (never commit)
+ml/data/*
+!ml/data/.gitkeep
+ml/runs/
+ml/checkpoints/
+inference/models/*
+!inference/models/.gitkeep
+web/public/models/*
+!web/public/models/.gitkeep
+*.h5
+*.keras
+*.pt
+*.pth
+*.onnx
+*.tflite
+*.task
+*.zip
+bin/
+*.exe
