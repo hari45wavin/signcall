@@ -1,0 +1,10 @@
+services:
+  inference:
+    build: ./inference
+    ports:
+      - "8000:8000"
+    env_file:
+      - path: ./inference/.env
+        required: false
+    volumes:
+      - ./inference/models:/app/models:ro
