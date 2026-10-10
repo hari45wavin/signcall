@@ -9,7 +9,17 @@ export async function POST(req: Request) {
   const apiKey = process.env.LIVEKIT_API_KEY || "devkey";
   const apiSecret = process.env.LIVEKIT_API_SECRET || "secret";
   const reqHost = req.headers.get("host")?.split(":")[0] || "localhost";
-  const livekitUrl = process.env.NEXT_PUBLIC_LIVEKIT_URL || `ws://${reqHost}:7880`;
+  const isHttps = req.headers.get("x-forwarded-proto") === "https" || req.url.startsWith("https://");
+  const isTunnelOrRemote = !reqHost.includes("localhost") && !reqHost.startsWith("127.") && !reqHost.startsWith("192.168.") && !reqHost.startsWith("10.");
+
+  let livekitUrl = process.env.NEXT_PUBLIC_LIVEKIT_URL;
+  if (!livekitUrl) {
+    if (isHttps && isTunnelOrRemote) {
+      livekitUrl = "demo://signcall";
+    } else {
+      livekitUrl = `ws://${reqHost}:7880`;
+    }
+  }
 
   const body = await req.json().catch(() => null);
   const roomId = String(body?.roomId ?? "");

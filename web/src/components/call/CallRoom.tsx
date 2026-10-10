@@ -53,7 +53,8 @@ export function CallRoom({
   initialSignModeOn = false,
   initialMirrorVideo = true,
 }: CallRoomProps) {
-  const isLiveKit = Boolean(session.url && (session.url.startsWith("wss://") || session.url.startsWith("ws://")));
+  const [liveKitFailed, setLiveKitFailed] = useState(false);
+  const isLiveKit = !liveKitFailed && Boolean(session.url && (session.url.startsWith("wss://") || session.url.startsWith("ws://")));
 
   if (isLiveKit) {
     return (
@@ -63,6 +64,10 @@ export function CallRoom({
         connect
         audio={initialMicOn}
         video={initialCameraOn}
+        onError={(err) => {
+          console.warn("[LiveKit] Connection notice, gracefully operating in direct mode:", err);
+          setLiveKitFailed(true);
+        }}
         onDisconnected={onLeave}
         data-lk-theme="default"
         className="min-h-screen"
