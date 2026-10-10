@@ -16,6 +16,7 @@ import { CheatSheetModal } from "@/components/sign/CheatSheetModal";
 import { useCaptions } from "@/hooks/useCaptions";
 import { useSignRecognition } from "@/hooks/useSignRecognition";
 import { speak } from "@/lib/tts";
+import { translateSignText, type TranslationTone } from "@/lib/translate";
 
 import {
   LiveKitRoom,
@@ -140,6 +141,8 @@ function CallRoomInner({
   const [voiceName, setVoiceName] = useState("");
   const [speechRate, setSpeechRate] = useState(1.0);
   const [signLanguage, setSignLanguage] = useState("ASL");
+  const [aiTranslateEnabled, setAiTranslateEnabled] = useState(true);
+  const [translationTone, setTranslationTone] = useState<TranslationTone>("conversational");
   const [callTitle, setCallTitle] = useState("SignCall Room");
   const [mediaNotice, setMediaNotice] = useState<string | null>(null);
 
@@ -364,11 +367,22 @@ function CallRoomInner({
   } = useSignRecognition({
     videoRef: masterVideoRef,
     enabled: signModeOn,
-    onCaptionUpdate: (text, isFinal) => {
+    onCaptionUpdate: async (text, isFinal) => {
       if (isFinal) {
-        setCommittedCaption(text);
+        let textToPublish = text;
+        if (aiTranslateEnabled && text.trim()) {
+          try {
+            const res = await translateSignText(text, translationTone);
+            if (res.translated) {
+              textToPublish = res.translated;
+            }
+          } catch (e) {
+            console.warn("[SignCall AI] Translation fallback:", e);
+          }
+        }
+        setCommittedCaption(textToPublish);
         setPendingCaption("");
-        publish(text, { final: true, source: "signed" });
+        publish(textToPublish, { final: true, source: "signed" });
 
         // Add to transcript
         const now = new Date();
@@ -380,14 +394,14 @@ function CallRoomInner({
             who: "You",
             mode: "Signed",
             time: timeStr,
-            text,
+            text: textToPublish,
             bubbleBg: "#EAF0FF",
             textColor: "#111827",
           },
         ]);
 
         if (readAloud) {
-          speak(text, { rate: speechRate });
+          speak(textToPublish, { rate: speechRate });
         }
       } else {
         setCommittedCaption(text);
@@ -763,6 +777,9 @@ function CallRoomInner({
             setSpotlightId("p-local");
           }
         }}
+        aiTranslateEnabled={aiTranslateEnabled}
+        onToggleAiTranslate={() => setAiTranslateEnabled((v) => !v)}
+        translationTone={translationTone}
         captionsOn={captionsOn}
         onToggleCaptions={() => setCaptionsOn((v) => !v)}
         voiceOn={readAloud}
@@ -817,6 +834,10 @@ function CallRoomInner({
         onSignLanguageChange={setSignLanguage}
         mirrorVideo={mirrorVideo}
         onToggleMirrorVideo={setMirrorVideo}
+        aiTranslateEnabled={aiTranslateEnabled}
+        onToggleAiTranslate={setAiTranslateEnabled}
+        translationTone={translationTone}
+        onTranslationToneChange={setTranslationTone}
         isHost={isHost}
         hostManagementEnabled={hostManagementEnabled}
         onToggleHostManagement={setHostManagementEnabled}

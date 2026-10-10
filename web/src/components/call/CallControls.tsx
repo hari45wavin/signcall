@@ -33,6 +33,9 @@ interface CallControlsProps {
   onToggleMirror?: () => void;
   signModeOn: boolean;
   onToggleSignMode: () => void;
+  aiTranslateEnabled?: boolean;
+  onToggleAiTranslate?: () => void;
+  translationTone?: string;
   captionsOn: boolean;
   onToggleCaptions: () => void;
   voiceOn: boolean;
@@ -59,6 +62,9 @@ export function CallControls({
   onToggleMirror,
   signModeOn,
   onToggleSignMode,
+  aiTranslateEnabled = true,
+  onToggleAiTranslate,
+  translationTone = "conversational",
   captionsOn,
   onToggleCaptions,
   voiceOn,
@@ -251,6 +257,29 @@ export function CallControls({
           <HandSignIcon className="w-4.5 h-4.5" />
           <span className="hidden sm:inline">{signModeOn ? "Sign on" : "Sign"}</span>
         </button>
+
+        {/* AI Sign-to-Speech Translation Toggle */}
+        {onToggleAiTranslate && (
+          <button
+            type="button"
+            onClick={onToggleAiTranslate}
+            aria-pressed={aiTranslateEnabled}
+            aria-label={aiTranslateEnabled ? "Turn off AI sign translation" : "Turn on AI sign translation"}
+            title={`AI Translation: ${aiTranslateEnabled ? `Active (${translationTone})` : "Off"}`}
+            className={`h-11.5 px-3 sm:px-3.5 rounded-full flex items-center gap-1.5 transition-all cursor-pointer shadow-xs text-xs font-bold ${
+              aiTranslateEnabled
+                ? isLight
+                  ? "bg-purple-100 text-purple-700 hover:bg-purple-200 border border-purple-200"
+                  : "bg-purple-950/80 text-purple-300 hover:bg-purple-900/80 border border-purple-800/60"
+                : isLight
+                ? "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                : "bg-[#3c4043] text-gray-400 hover:bg-[#474a4d]"
+            }`}
+          >
+            <span className="text-sm">✨</span>
+            <span className="hidden md:inline">{aiTranslateEnabled ? "AI Active" : "AI"}</span>
+          </button>
+        )}
 
         {/* Text-to-Speech Voice Toggle */}
         <button

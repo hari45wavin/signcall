@@ -11,8 +11,11 @@ import {
   SunIcon,
   MoonIcon,
   VolumeXIcon,
+  HandSignIcon,
+  CheckIcon,
 } from "@/components/common/Icons";
-import { getVoicesAsync, testVoice } from "@/lib/tts";
+import { getVoicesAsync, testVoice, speak } from "@/lib/tts";
+import { translateSignText, type TranslationTone, type TranslationResult } from "@/lib/translate";
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -29,6 +32,11 @@ interface SettingsModalProps {
   onSignLanguageChange: (lang: string) => void;
   mirrorVideo?: boolean;
   onToggleMirrorVideo?: (val: boolean) => void;
+  // AI Translation (LLM Sign-to-Speech)
+  aiTranslateEnabled?: boolean;
+  onToggleAiTranslate?: (val: boolean) => void;
+  translationTone?: TranslationTone;
+  onTranslationToneChange?: (tone: TranslationTone) => void;
   // Host management
   isHost?: boolean;
   hostManagementEnabled?: boolean;
@@ -57,6 +65,10 @@ export function SettingsModal({
   onSignLanguageChange,
   mirrorVideo = true,
   onToggleMirrorVideo,
+  aiTranslateEnabled = true,
+  onToggleAiTranslate,
+  translationTone = "conversational",
+  onTranslationToneChange,
   isHost = true,
   hostManagementEnabled = true,
   onToggleHostManagement,
@@ -69,7 +81,10 @@ export function SettingsModal({
   onMuteAll,
 }: SettingsModalProps) {
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
-  const [activeTab, setActiveTab] = useState<"general" | "audio" | "host">("general");
+  const [activeTab, setActiveTab] = useState<"general" | "audio" | "ai" | "host">("general");
+  const [testInput, setTestInput] = useState("ME WANT WATER PLEASE");
+  const [testResult, setTestResult] = useState<TranslationResult | null>(null);
+  const [isTranslating, setIsTranslating] = useState(false);
   const isLight = theme === "light";
 
   // Async voice retrieval with fallback
@@ -178,6 +193,22 @@ export function SettingsModal({
             }`}
           >
             Voice & Captions
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("ai")}
+            className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              activeTab === "ai"
+                ? isLight
+                  ? "bg-[#1a73e8] text-white"
+                  : "bg-[#8ab4f8] text-[#202124]"
+                : isLight
+                ? "text-gray-600 hover:bg-gray-100"
+                : "text-gray-400 hover:bg-white/10"
+            }`}
+          >
+            <span>✨ AI Translation</span>
           </button>
 
           {isHost && (
@@ -401,6 +432,206 @@ export function SettingsModal({
                   ))}
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Tab: AI Sign Language Translation (LLM) */}
+        {activeTab === "ai" && (
+          <div className="flex flex-col gap-5">
+            {/* Master Toggle */}
+            <div
+              className={`p-4 rounded-2xl border flex items-center justify-between ${
+                isLight ? "bg-[#e8f0fe]/40 border-[#1a73e8]/30" : "bg-[#8ab4f8]/10 border-[#8ab4f8]/30"
+              }`}
+            >
+              <div>
+                <h4 className="text-sm font-bold m-0 text-current flex items-center gap-1.5">
+                  <span>✨ AI Sign-to-Speech Translation</span>
+                </h4>
+                <p className={`text-xs m-0 mt-0.5 ${isLight ? "text-gray-600" : "text-gray-300"}`}>
+                  Transforms fingerspelled signs & ASL glosses into fluent, grammatically complete spoken English
+                </p>
+              </div>
+              <input
+                type="checkbox"
+                checked={aiTranslateEnabled}
+                onChange={(e) => onToggleAiTranslate?.(e.target.checked)}
+                className="w-5 h-5 rounded accent-[#1a73e8] cursor-pointer"
+              />
+            </div>
+
+            {/* Translation Tone Selector */}
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-semibold text-current">
+                Conversational Spoken Tone
+              </label>
+              <div className="grid grid-cols-2 gap-2.5">
+                {[
+                  {
+                    id: "conversational",
+                    name: "Conversational",
+                    desc: "Natural, friendly, standard English (Default)",
+                  },
+                  {
+                    id: "professional",
+                    name: "Professional",
+                    desc: "Polite, formal tone for workplace & interviews",
+                  },
+                  {
+                    id: "concise",
+                    name: "Concise",
+                    desc: "Direct, short and to the point",
+                  },
+                  {
+                    id: "casual",
+                    name: "Casual",
+                    desc: "Warm, relaxed, friendly chat",
+                  },
+                ].map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => onTranslationToneChange?.(t.id as TranslationTone)}
+                    className={`p-3 rounded-xl border text-left flex flex-col gap-1 cursor-pointer transition-all ${
+                      translationTone === t.id
+                        ? isLight
+                          ? "border-[#1a73e8] bg-[#e8f0fe] ring-2 ring-[#1a73e8]/20"
+                          : "border-[#8ab4f8] bg-[#8ab4f8]/20 ring-2 ring-[#8ab4f8]/30"
+                        : isLight
+                        ? "border-gray-200 hover:bg-gray-50"
+                        : "border-white/10 hover:bg-white/5"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-current">{t.name}</span>
+                      {translationTone === t.id && (
+                        <CheckIcon className="w-3.5 h-3.5 text-[#1a73e8]" />
+                      )}
+                    </div>
+                    <span className={`text-[11px] leading-tight ${isLight ? "text-gray-500" : "text-gray-400"}`}>
+                      {t.desc}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Interactive Live Playground */}
+            <div
+              className={`p-4 rounded-2xl border flex flex-col gap-3 ${
+                isLight ? "bg-gray-50/70 border-gray-200" : "bg-white/5 border-white/10"
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold uppercase tracking-wider text-current">
+                  Live Model Playground
+                </span>
+                <span className={`text-[11px] ${isLight ? "text-gray-500" : "text-gray-400"}`}>
+                  Test how the LLM translates ASL
+                </span>
+              </div>
+
+              {/* Sample Quick Chips */}
+              <div className="flex flex-wrap gap-1.5">
+                {[
+                  "ME WANT WATER PLEASE",
+                  "NICE MEET YOU",
+                  "NAME YOU WHAT",
+                  "ME DEAF TALK SIGN",
+                  "CAN HELP ME WITH WORK",
+                ].map((sample) => (
+                  <button
+                    key={sample}
+                    type="button"
+                    onClick={() => {
+                      setTestInput(sample);
+                      setIsTranslating(true);
+                      translateSignText(sample, translationTone || "conversational")
+                        .then(setTestResult)
+                        .finally(() => setIsTranslating(false));
+                    }}
+                    className={`text-[11px] font-semibold px-2.5 py-1 rounded-full cursor-pointer transition-colors ${
+                      isLight
+                        ? "bg-white border border-gray-200 text-gray-700 hover:bg-gray-100"
+                        : "bg-white/10 border border-white/10 text-gray-300 hover:bg-white/20"
+                    }`}
+                  >
+                    {sample}
+                  </button>
+                ))}
+              </div>
+
+              {/* Input & Action */}
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={testInput}
+                  onChange={(e) => setTestInput(e.target.value)}
+                  placeholder="Enter raw sign glosses (e.g. ME WANT WATER)"
+                  className={`flex-1 px-3.5 py-2 rounded-xl border text-sm outline-none ${
+                    isLight
+                      ? "bg-white border-gray-300 text-gray-900 focus:border-[#1a73e8]"
+                      : "bg-[#202124] border-white/20 text-white focus:border-[#8ab4f8]"
+                  }`}
+                />
+                <button
+                  type="button"
+                  disabled={isTranslating || !testInput.trim()}
+                  onClick={() => {
+                    setIsTranslating(true);
+                    translateSignText(testInput, translationTone || "conversational")
+                      .then(setTestResult)
+                      .finally(() => setIsTranslating(false));
+                  }}
+                  className={`px-4 py-2 rounded-xl font-bold text-xs cursor-pointer disabled:opacity-50 transition-all ${
+                    isLight
+                      ? "bg-[#1a73e8] hover:bg-[#1557b0] text-white"
+                      : "bg-[#8ab4f8] hover:bg-[#a8c7fa] text-[#202124]"
+                  }`}
+                >
+                  {isTranslating ? "Translating..." : "Translate"}
+                </button>
+              </div>
+
+              {/* Output Card */}
+              {testResult && (
+                <div
+                  className={`p-3.5 rounded-xl border flex flex-col gap-2 animate-in fade-in duration-150 ${
+                    isLight
+                      ? "bg-white border-emerald-200 text-gray-900"
+                      : "bg-[#1f2023] border-emerald-500/30 text-white"
+                  }`}
+                >
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-semibold text-emerald-600">
+                      Translated Spoken English:
+                    </span>
+                    <span
+                      className={`text-[10px] px-2 py-0.5 rounded-full font-mono ${
+                        isLight ? "bg-gray-100 text-gray-600" : "bg-white/10 text-gray-300"
+                      }`}
+                    >
+                      {testResult.provider} ({testResult.latency_ms}ms)
+                    </span>
+                  </div>
+                  <p className="text-sm font-bold m-0 leading-snug">
+                    &ldquo;{testResult.translated}&rdquo;
+                  </p>
+                  <div className="flex items-center justify-between pt-1 border-t border-current/10">
+                    <span className={`text-[11px] ${isLight ? "text-gray-500" : "text-gray-400"}`}>
+                      Tone: {testResult.tone}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => speak(testResult.translated, { voiceName, rate: speechRate })}
+                      className="text-xs font-bold text-[#1a73e8] hover:underline flex items-center gap-1 cursor-pointer"
+                    >
+                      🔊 Speak translation
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
