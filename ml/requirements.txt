@@ -1,0 +1,10 @@
+numpy>=1.26
+mediapipe>=0.10.14
+opencv-python>=4.9
+scikit-learn>=1.4
+torch>=2.3
+onnx>=1.16
+pandas>=2.2
+tqdm>=4.66
+kaggle>=1.6
+pytest>=8
