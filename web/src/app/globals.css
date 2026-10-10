@@ -1,0 +1,93 @@
+@import "tailwindcss";
+
+/* Minimal light theme (design/README.md) */
+@theme {
+  --color-accent: #2f62e8;
+  --color-leave: #e5532f;
+  --color-panel: #f4f5f7;
+  --color-ink: #111827;
+  --color-muted: #6b7280;
+  --font-sans: var(--font-jakarta), system-ui, sans-serif;
+  --font-caption: var(--font-atkinson), system-ui, sans-serif;
+}
+
+:root {
+  --caption-size: 28px;
+}
+
+body {
+  background: #202124;
+  color: #ffffff;
+  font-family: var(--font-sans);
+}
+
+/* Explicit video mirroring control: ensures selfie camera can be unmirrored or mirrored */
+.sc-unmirrored,
+.sc-unmirrored video,
+video.sc-unmirrored,
+[data-lk-theme].sc-unmirrored video,
+.sc-unmirrored [data-lk-facing-mode="user"],
+[data-lk-facing-mode="user"].sc-unmirrored,
+video[data-lk-facing-mode="user"].sc-unmirrored {
+  transform: none !important;
+}
+
+.sc-mirrored,
+.sc-mirrored video,
+video.sc-mirrored,
+[data-lk-theme].sc-mirrored video,
+.sc-mirrored [data-lk-facing-mode="user"],
+[data-lk-facing-mode="user"].sc-mirrored,
+video[data-lk-facing-mode="user"].sc-mirrored {
+  transform: scaleX(-1) !important;
+}
+
+/* Accessible focus ring */
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+a:focus-visible {
+  outline: 2px solid #2f62e8;
+  outline-offset: 3px;
+}
+
+/* Blinking caret for live sign language word builder */
+@keyframes sc-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+.sc-caret {
+  animation: sc-blink 1s steps(1) infinite;
+}
+
+/* Custom subtle scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.12);
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.22);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+  .sc-caret {
+    animation: none !important;
+    opacity: 1 !important;
+  }
+}
