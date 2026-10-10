@@ -15,6 +15,7 @@ import { AdjustViewModal, type LayoutMode } from "./AdjustViewModal";
 import { CheatSheetModal } from "@/components/sign/CheatSheetModal";
 import { useCaptions } from "@/hooks/useCaptions";
 import { useSignRecognition } from "@/hooks/useSignRecognition";
+import { useWebRtcRoom } from "@/hooks/useWebRtcRoom";
 import { speak } from "@/lib/tts";
 import { translateSignText, type TranslationTone } from "@/lib/translate";
 
@@ -135,6 +136,7 @@ function CallRoomInner({
   const [cameraOn, setCameraOn] = useState(initialCameraOn ?? true);
   const [signModeOn, setSignModeOn] = useState(initialSignModeOn ?? false);
   const [mirrorVideo, setMirrorVideo] = useState(initialMirrorVideo ?? true);
+  const [facingMode, setFacingMode] = useState<"user" | "environment">("user");
   const [captionsOn, setCaptionsOn] = useState(true);
   const [readAloud, setReadAloud] = useState(true);
   const [captionSize, setCaptionSize] = useState(28);
@@ -182,7 +184,7 @@ function CallRoomInner({
     return fallbackStream;
   }, [liveKitMediaTrack, fallbackStream]);
 
-  // If LiveKit is NOT active, acquire fallback media stream
+  // If LiveKit is NOT active, acquire fallback media stream with mobile orientation resilience
   useEffect(() => {
     if (localParticipant) return; // LiveKit manages devices
 
@@ -190,7 +192,13 @@ function CallRoomInner({
     if (cameraOn || micOn) {
       navigator.mediaDevices
         ?.getUserMedia({
-          video: cameraOn ? { width: 1280, height: 720 } : false,
+          video: cameraOn
+            ? {
+                facingMode: { ideal: facingMode },
+                width: { ideal: 1280 },
+                height: { ideal: 720 },
+              }
+            : false,
           audio: micOn,
         })
         .then((s) => {
@@ -212,7 +220,35 @@ function CallRoomInner({
         fallbackStream.getTracks().forEach((t) => t.stop());
       }
     };
-  }, [localParticipant]);
+  }, [localParticipant, cameraOn, micOn, facingMode]);
+
+  // Flip front / rear camera handler (crucial for mobile devices)
+  const handleFlipCamera = useCallback(async () => {
+    const nextMode = facingMode === "user" ? "environment" : "user";
+    setFacingMode(nextMode);
+    setMirrorVideo(nextMode === "user");
+
+    if (!localParticipant) {
+      if (fallbackStream) {
+        fallbackStream.getVideoTracks().forEach((t) => t.stop());
+      }
+      try {
+        const s = await navigator.mediaDevices.getUserMedia({
+          video: cameraOn
+            ? {
+                facingMode: { ideal: nextMode },
+                width: { ideal: 1280 },
+                height: { ideal: 720 },
+              }
+            : false,
+          audio: micOn,
+        });
+        setFallbackStream(s);
+      } catch (err) {
+        console.warn("[SignCall] Camera flip notice:", err);
+      }
+    }
+  }, [facingMode, localParticipant, fallbackStream, cameraOn, micOn]);
 
   // Sync master video ref whenever localStream updates
   useEffect(() => {
@@ -288,6 +324,8 @@ function CallRoomInner({
   // Live caption text on screen
   const [committedCaption, setCommittedCaption] = useState("SignCall ready");
   const [pendingCaption, setPendingCaption] = useState("");
+  const [captionSpeakerName, setCaptionSpeakerName] = useState<string>("You");
+  const [captionSpeakerIsSigning, setCaptionSpeakerIsSigning] = useState<boolean>(true);
 
   // Captions publishing hook
   const { captions, publish } = useCaptions({ readAloud });
@@ -297,14 +335,51 @@ function CallRoomInner({
     document.documentElement.style.setProperty("--caption-size", `${captionSize}px`);
   }, [captionSize]);
 
-  // Sync sign mode state
+  // Synchronize sign mode state
   useEffect(() => {
     setParticipants((prev) =>
       prev.map((p) => (p.isLocal ? { ...p, isSigning: signModeOn } : p))
     );
   }, [signModeOn]);
 
-  // Synchronize participants with real LiveKit peers
+  // Cross-network WebRTC P2P Mesh Room for mobile & non-local participants (runs automatically when LiveKit is in direct/tunnel mode)
+  const isWebRtcMeshActive = !localParticipant;
+  const { remotePeers, broadcast } = useWebRtcRoom({
+    roomId,
+    peerId: session.identity || "local-peer",
+    name: localParticipantName,
+    localStream,
+    enabled: isWebRtcMeshActive,
+    onRemoteCaption: (sender, text, isFinal) => {
+      setCaptionSpeakerName(sender);
+      setCaptionSpeakerIsSigning(true);
+      if (isFinal) {
+        setCommittedCaption(text);
+        setPendingCaption("");
+        const now = new Date();
+        const timeStr = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
+        setTranscriptEntries((prev) => [
+          ...prev,
+          {
+            id: `t-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+            who: sender,
+            mode: "Signed",
+            time: timeStr,
+            text,
+            bubbleBg: "#EAF0FF",
+            textColor: "#111827",
+          },
+        ]);
+        if (readAloud) {
+          speak(text, { rate: speechRate });
+        }
+      } else {
+        setPendingCaption(text);
+      }
+    },
+  });
+
+  // Synchronize participants with real LiveKit peers OR cross-network WebRTC peers
   useEffect(() => {
     const localInfo: ParticipantInfo = {
       id: "p-local",
@@ -320,33 +395,50 @@ function CallRoomInner({
       trackRef: localCameraTrackRef,
     };
 
-    if (!remoteParticipants || remoteParticipants.length === 0) {
-      setParticipants([localInfo]);
+    // 1. Real remote participants from LiveKit (if LiveKit active)
+    if (remoteParticipants && remoteParticipants.length > 0) {
+      const realRemotes: ParticipantInfo[] = remoteParticipants.map((rp) => {
+        const rpTrack = liveKitTracks?.find(
+          (t) => t.participant.identity === rp.identity && t.source === Track.Source.Camera
+        );
+        const name = rp.name || rp.identity.split("-")[0] || "Peer";
+        return {
+          id: rp.identity,
+          name,
+          initial: (name[0] || "P").toUpperCase(),
+          isSigning: false,
+          isSpeaking: rp.isSpeaking,
+          isMuted: !rp.isMicrophoneEnabled,
+          isPinned: false,
+          isLocal: false,
+          avatarBg: "#E3E0EA",
+          trackRef: rpTrack,
+        };
+      });
+      setParticipants([localInfo, ...realRemotes]);
       return;
     }
 
-    // Real remote participants from LiveKit ONLY
-    const realRemotes: ParticipantInfo[] = remoteParticipants.map((rp) => {
-      const rpTrack = liveKitTracks?.find(
-        (t) => t.participant.identity === rp.identity && t.source === Track.Source.Camera
-      );
-      const name = rp.name || rp.identity.split("-")[0] || "Peer";
-      return {
-        id: rp.identity,
-        name,
-        initial: (name[0] || "P").toUpperCase(),
+    // 2. Real remote peers from cross-network WebRTC (works across mobile cellular & different Wi-Fi networks!)
+    if (remotePeers && remotePeers.length > 0) {
+      const meshRemotes: ParticipantInfo[] = remotePeers.map((rp) => ({
+        id: rp.id,
+        name: rp.name,
+        initial: (rp.name[0] || "P").toUpperCase(),
         isSigning: false,
-        isSpeaking: rp.isSpeaking,
-        isMuted: !rp.isMicrophoneEnabled,
+        isSpeaking: false,
+        isMuted: false,
         isPinned: false,
         isLocal: false,
         avatarBg: "#E3E0EA",
-        trackRef: rpTrack,
-      };
-    });
+        stream: rp.stream,
+      }));
+      setParticipants([localInfo, ...meshRemotes]);
+      return;
+    }
 
-    setParticipants([localInfo, ...realRemotes]);
-  }, [remoteParticipants, liveKitTracks, localCameraTrackRef, localParticipantName, micOn, signModeOn, localStream]);
+    setParticipants([localInfo]);
+  }, [remoteParticipants, liveKitTracks, localCameraTrackRef, localParticipantName, micOn, signModeOn, localStream, remotePeers]);
 
   // Auto-reset spotlight if current spotlight participant leaves
   useEffect(() => {
@@ -382,7 +474,12 @@ function CallRoomInner({
         }
         setCommittedCaption(textToPublish);
         setPendingCaption("");
+        setCaptionSpeakerName("You");
+        setCaptionSpeakerIsSigning(true);
         publish(textToPublish, { final: true, source: "signed" });
+        if (!localParticipant) {
+          broadcast("caption", { text: textToPublish, final: true });
+        }
 
         // Add to transcript
         const now = new Date();
@@ -708,7 +805,7 @@ function CallRoomInner({
                     : "bg-[#8ab4f8]/10 text-[#8ab4f8]"
                 }`}
               >
-                {currentSpeaker.name} {currentSpeaker.isSigning ? "• Signed" : "• Speaking"}
+                {captionSpeakerName || currentSpeaker.name} {captionSpeakerIsSigning ? "• Signed" : "• Speaking"}
               </span>
               <p
                 className={`m-0 font-medium truncate text-base md:text-lg ${
@@ -770,6 +867,8 @@ function CallRoomInner({
         onToggleCamera={handleToggleCamera}
         mirrorVideo={mirrorVideo}
         onToggleMirror={() => setMirrorVideo((v) => !v)}
+        facingMode={facingMode}
+        onFlipCamera={handleFlipCamera}
         signModeOn={signModeOn}
         onToggleSignMode={() => {
           setSignModeOn((v) => !v);
@@ -797,6 +896,22 @@ function CallRoomInner({
         onOpenMobileJoin={() => setIsMobileJoinOpen(true)}
         onLeaveCall={handleLeave}
       />
+
+      {/* Remote WebRTC audio tracks so mobile & cross-network participants speak aloud */}
+      <div className="hidden" aria-hidden="true">
+        {remotePeers.map((rp) => (
+          <audio
+            key={rp.id}
+            autoPlay
+            playsInline
+            ref={(el) => {
+              if (el && el.srcObject !== rp.stream) {
+                el.srcObject = rp.stream;
+              }
+            }}
+          />
+        ))}
+      </div>
 
       {/* Google Meet Adjust View (Change Layout) Modal */}
       <AdjustViewModal

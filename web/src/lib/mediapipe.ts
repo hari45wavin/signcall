@@ -8,11 +8,20 @@ const MODEL_URL =
 
 export async function createHandLandmarker(): Promise<HandLandmarker> {
   const fileset = await FilesetResolver.forVisionTasks(WASM_URL);
-  return HandLandmarker.createFromOptions(fileset, {
-    baseOptions: { modelAssetPath: MODEL_URL, delegate: "GPU" },
-    runningMode: "VIDEO",
-    numHands: 2,
-  });
+  try {
+    return await HandLandmarker.createFromOptions(fileset, {
+      baseOptions: { modelAssetPath: MODEL_URL, delegate: "GPU" },
+      runningMode: "VIDEO",
+      numHands: 2,
+    });
+  } catch (err) {
+    console.warn("[MediaPipe] GPU delegate unavailable on this mobile/browser platform, falling back to CPU:", err);
+    return await HandLandmarker.createFromOptions(fileset, {
+      baseOptions: { modelAssetPath: MODEL_URL, delegate: "CPU" },
+      runningMode: "VIDEO",
+      numHands: 2,
+    });
+  }
 }
 
 export function toHands(result: HandLandmarkerResult): Hand[] {

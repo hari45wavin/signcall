@@ -13,6 +13,7 @@ import {
   MessageSquareIcon,
   MoreHorizontalIcon,
   FlipHorizontalIcon,
+  SwitchCameraIcon,
   PhoneOffIcon,
   SmartphoneIcon,
   MaximizeIcon,
@@ -31,6 +32,8 @@ interface CallControlsProps {
   onToggleCamera: () => void;
   mirrorVideo?: boolean;
   onToggleMirror?: () => void;
+  facingMode?: "user" | "environment";
+  onFlipCamera?: () => void;
   signModeOn: boolean;
   onToggleSignMode: () => void;
   aiTranslateEnabled?: boolean;
@@ -60,6 +63,8 @@ export function CallControls({
   onToggleCamera,
   mirrorVideo = true,
   onToggleMirror,
+  facingMode = "user",
+  onFlipCamera,
   signModeOn,
   onToggleSignMode,
   aiTranslateEnabled = true,
@@ -214,6 +219,23 @@ export function CallControls({
             }`}
           >
             <FlipHorizontalIcon className="w-5 h-5" />
+          </button>
+        )}
+
+        {/* Switch Camera (Front / Rear for mobile devices) */}
+        {onFlipCamera && (
+          <button
+            type="button"
+            onClick={onFlipCamera}
+            aria-label={facingMode === "user" ? "Switch to rear camera" : "Switch to front camera"}
+            title={facingMode === "user" ? "Switch to back camera" : "Switch to front selfie camera"}
+            className={`w-11.5 h-11.5 rounded-full flex items-center justify-center transition-all cursor-pointer shadow-xs ${
+              isLight
+                ? "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                : "bg-[#3c4043] text-white hover:bg-[#474a4d]"
+            }`}
+          >
+            <SwitchCameraIcon className="w-5 h-5" />
           </button>
         )}
 
