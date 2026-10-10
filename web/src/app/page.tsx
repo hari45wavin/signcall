@@ -43,16 +43,23 @@ export default function LandingPage() {
     return () => clearInterval(interval);
   }, []);
 
-  const handleStartCall = () => {
-    const id = newRoomId();
-    window.location.assign(`/room/${id}?host=1`);
+  const [createdRoomId, setCreatedRoomId] = useState("");
+
+  useEffect(() => {
+    setCreatedRoomId(newRoomId());
+  }, []);
+
+  const handleStartCall = (e?: React.MouseEvent) => {
+    if (e) e.preventDefault();
+    const id = createdRoomId || newRoomId();
+    window.location.href = `/room/${id}?host=1`;
   };
 
-  const handleJoin = (e: React.FormEvent) => {
-    e.preventDefault();
-    const cleaned = code.trim().split("/").pop();
+  const handleJoin = (e?: React.FormEvent | React.MouseEvent) => {
+    if (e) e.preventDefault();
+    const cleaned = code.trim().split("/").pop()?.trim();
     if (cleaned) {
-      window.location.assign(`/room/${cleaned}`);
+      window.location.href = `/room/${cleaned}`;
     }
   };
 
@@ -112,20 +119,20 @@ export default function LandingPage() {
 
           {/* Action Row: Start Call & Join Input */}
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3.5 pt-2">
-            <button
-              type="button"
+            <Link
+              href={`/room/${createdRoomId || "call-live"}?host=1`}
               onClick={handleStartCall}
               className="h-13 px-7 rounded-full bg-[#2F62E8] hover:bg-[#2552c7] text-white text-base font-bold shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2.5 cursor-pointer flex-shrink-0"
             >
               <VideoIcon className="w-5 h-5" />
               <span>Start a new call</span>
-            </button>
+            </Link>
 
             <form onSubmit={handleJoin} className="flex-1 flex items-center gap-2">
               <div className="relative flex-1">
                 <input
                   type="text"
-                  placeholder="Enter a code or link"
+                  placeholder="Enter a code or link (e.g. hariom)"
                   value={code}
                   onChange={(e) => setCode(e.target.value)}
                   className="w-full h-13 rounded-full border border-gray-300 bg-[#F4F5F7] px-5 text-base text-[#111827] placeholder:text-gray-400 outline-none focus:border-[#2F62E8] focus:bg-white transition-all shadow-2xs"
@@ -135,6 +142,7 @@ export default function LandingPage() {
 
               <button
                 type="submit"
+                onClick={handleJoin}
                 disabled={!code.trim()}
                 className="h-13 px-6 rounded-full border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed font-bold text-base text-[#111827] shadow-2xs transition-all cursor-pointer"
               >

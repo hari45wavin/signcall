@@ -8,6 +8,7 @@ export function newRoomId(): string {
 }
 
 export function isValidRoomId(id: string): boolean {
-  // Supports 4-4-4 format (e.g. k7f2-x9qm-p3ta) as well as named rooms like hack-sign-42
-  return /^[a-z0-9]{2,12}(-[a-z0-9]{2,12}){1,3}$/i.test(id);
+  if (!id || typeof id !== "string") return false;
+  // Supports hyphenated rooms (k7f2-x9qm-p3ta, hack-sign-42) and custom names (hariom, demo, team)
+  return /^[a-z0-9_-]{2,64}$/i.test(id.trim());
 }

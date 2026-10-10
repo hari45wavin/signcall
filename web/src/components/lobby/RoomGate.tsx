@@ -426,9 +426,8 @@ export function RoomGate({ roomId, host }: RoomGateProps) {
                 id="display-name-input"
                 type="text"
                 autoFocus
-                required
                 maxLength={40}
-                placeholder="e.g. Alex"
+                placeholder="e.g. Alex (defaults to Guest)"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 className="w-full rounded-2xl border border-gray-300 bg-[#F4F5F7] px-4.5 py-3.5 text-base text-[#111827] placeholder:text-gray-400 outline-none focus:border-[#2F62E8] focus:bg-white transition-all shadow-xs"
@@ -457,6 +456,7 @@ export function RoomGate({ roomId, host }: RoomGateProps) {
             {/* Join Button */}
             <button
               type="submit"
+              onClick={join}
               disabled={busy}
               className="w-full py-4 rounded-full bg-[#2F62E8] hover:bg-[#2552c7] disabled:opacity-60 text-white font-bold text-lg shadow-md hover:shadow-lg transition-all cursor-pointer flex items-center justify-center gap-2"
             >
