@@ -154,3 +154,112 @@ def get_tones() -> dict[str, Any]:
         ],
         "default": "conversational",
     }
+
+
+# Active WebRTC P2P signaling rooms: room_id -> { peer_id: (WebSocket, name) }
+from collections import defaultdict
+from fastapi import WebSocket, WebSocketDisconnect
+
+_active_rooms: dict[str, dict[str, tuple[WebSocket, str]]] = defaultdict(dict)
+
+
+@app.get("/room/{room_id}/peers")
+def get_room_peers(room_id: str) -> dict[str, Any]:
+    """Returns list of connected peers in a room."""
+    peers = [
+        {"peerId": pid, "name": name}
+        for pid, (_, name) in _active_rooms.get(room_id, {}).items()
+    ]
+    return {"room_id": room_id, "count": len(peers), "peers": peers}
+
+
+@app.websocket("/ws/room/{room_id}")
+async def room_signaling_endpoint(
+    websocket: WebSocket,
+    room_id: str,
+    peer_id: str,
+    name: str = "Participant",
+):
+    """
+    Real-time WebRTC room signaling endpoint.
+    Connects devices across different Wi-Fi and mobile cellular networks.
+    Exchanges SDP offers, answers, ICE candidates, and caption broadcasts.
+    """
+    await websocket.accept()
+    room = _active_rooms[room_id]
+    room[peer_id] = (websocket, name)
+
+    # 1. Send currently connected peers to the newly joined peer
+    existing_peers = [
+        {"peerId": pid, "name": pname}
+        for pid, (_, pname) in room.items()
+        if pid != peer_id
+    ]
+    await websocket.send_json({"type": "room-peers", "peers": existing_peers})
+
+    # 2. Notify all existing peers that a new peer joined
+    for pid, (peer_ws, _) in list(room.items()):
+        if pid != peer_id:
+            try:
+                await peer_ws.send_json(
+                    {"type": "peer-joined", "peerId": peer_id, "name": name}
+                )
+            except Exception:
+                pass
+
+    try:
+        while True:
+            data = await websocket.receive_json()
+            msg_type = data.get("type")
+
+            if msg_type == "signal":
+                target = data.get("target")
+                if target and target in room:
+                    target_ws, _ = room[target]
+                    try:
+                        await target_ws.send_json(
+                            {
+                                "type": "signal",
+                                "sender": peer_id,
+                                "name": name,
+                                "signal": data.get("signal"),
+                            }
+                        )
+                    except Exception:
+                        pass
+
+            elif msg_type == "broadcast":
+                # Broadcast caption, translation, or state update to all other room peers
+                for pid, (peer_ws, _) in list(room.items()):
+                    if pid != peer_id:
+                        try:
+                            await peer_ws.send_json(
+                                {
+                                    "type": "broadcast",
+                                    "sender": peer_id,
+                                    "event": data.get("event"),
+                                    "data": data.get("data"),
+                                }
+                            )
+                        except Exception:
+                            pass
+
+            elif msg_type == "ping":
+                await websocket.send_json({"type": "pong"})
+
+    except WebSocketDisconnect:
+        pass
+    except Exception:
+        pass
+    finally:
+        room.pop(peer_id, None)
+        if not room:
+            _active_rooms.pop(room_id, None)
+
+        # Notify remaining peers that this peer left
+        for pid, (peer_ws, _) in list(_active_rooms.get(room_id, {}).items()):
+            try:
+                await peer_ws.send_json({"type": "peer-left", "peerId": peer_id})
+            except Exception:
+                pass
+
