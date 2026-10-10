@@ -1,0 +1,24 @@
+{
+  "version": "0.1.0-draft",
+  "status": "DRAFT: language and vocabulary not frozen yet (see docs/decisions.md)",
+  "language": "TBD",
+  "static": {
+    "description": "Single-frame classes for the letter model. Index = model output index.",
+    "classes": [
+      "A", "B", "C", "D", "E", "F", "G", "H", "I", "K", "L", "M",
+      "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y",
+      "space", "del", "nothing"
+    ],
+    "control": {
+      "space": "commit current word",
+      "del": "remove last letter",
+      "nothing": "idle / no sign"
+    },
+    "notes": "J and Z are motion signs in ASL and are left out of the static model."
+  },
+  "sequence": {
+    "description": "Word classes for the sequence model (window of 30 frames). Fill in after the vocabulary is frozen.",
+    "window": 30,
+    "classes": ["nothing"]
+  }
+}
