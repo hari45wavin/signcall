@@ -6,13 +6,14 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+from .cleanup import translate_sign_to_speech, Tone
 from .ws import predictor, router
 
 START_TIME = time.time()
 
 app = FastAPI(
     title="SignCall Inference Service",
-    description="Real-time ASL and gesture prediction engine with WebSocket streaming and REST fallbacks.",
+    description="Real-time ASL and gesture prediction engine with WebSocket streaming, REST fallbacks, and LLM sign-to-speech translation.",
     version="1.0.0",
 )
 
@@ -49,6 +50,20 @@ class HttpPredictResponse(BaseModel):
     latency_ms: float
 
 
+class HttpTranslateRequest(BaseModel):
+    text: str
+    tone: str = "conversational"
+    mode: str = "asl_to_english"
+
+
+class HttpTranslateResponse(BaseModel):
+    original: str
+    translated: str
+    provider: str
+    tone: str
+    latency_ms: float
+
+
 @app.get("/health")
 def health() -> dict[str, Any]:
     return {
@@ -58,6 +73,7 @@ def health() -> dict[str, Any]:
         "labels_version": predictor.labels.get("version", "1.0.0"),
         "uptime_seconds": round(time.time() - START_TIME, 2),
         "classes_count": len(predictor.classes),
+        "llm_translation": True,
     }
 
 
@@ -82,3 +98,59 @@ def predict_http(payload: HttpPredictRequest) -> HttpPredictResponse:
         top3=top3,
         latency_ms=latency,
     )
+
+
+@app.post("/translate", response_model=HttpTranslateResponse)
+async def translate_http(payload: HttpTranslateRequest) -> HttpTranslateResponse:
+    """Translates raw ASL glosses/signs into fluent spoken English using local NLP or cloud LLM."""
+    if not payload.text:
+        return HttpTranslateResponse(
+            original="",
+            translated="",
+            provider="none",
+            tone=payload.tone,
+            latency_ms=0.0,
+        )
+    tone_arg: Tone = (
+        payload.tone  # type: ignore
+        if payload.tone in ("conversational", "professional", "concise", "casual")
+        else "conversational"
+    )
+    res = await translate_sign_to_speech(payload.text, tone=tone_arg)
+    return HttpTranslateResponse(
+        original=str(res["original"]),
+        translated=str(res["translated"]),
+        provider=str(res["provider"]),
+        tone=str(res["tone"]),
+        latency_ms=float(res["latency_ms"]),
+    )
+
+
+@app.get("/translate/tones")
+def get_tones() -> dict[str, Any]:
+    """Returns supported translation tone styles."""
+    return {
+        "tones": [
+            {
+                "id": "conversational",
+                "name": "Conversational",
+                "description": "Natural, friendly, everyday spoken English.",
+            },
+            {
+                "id": "professional",
+                "name": "Professional",
+                "description": "Polite, formal tone for workplace meetings and interviews.",
+            },
+            {
+                "id": "concise",
+                "name": "Concise",
+                "description": "Direct and brief statements.",
+            },
+            {
+                "id": "casual",
+                "name": "Casual",
+                "description": "Warm, relaxed, informal chat.",
+            },
+        ],
+        "default": "conversational",
+    }
